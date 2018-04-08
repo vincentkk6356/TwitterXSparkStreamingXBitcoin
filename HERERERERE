@@ -1,0 +1,114 @@
+import kafka.serializer.StringDecoder;
+import kafka.utils.Json;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.spark.SparkConf;
+
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.sql.*;
+import org.apache.spark.streaming.Durations;
+
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaInputDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.sql.streaming.StreamingQuery;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import scala.Array;
+import scala.Tuple2;
+import org.apache.spark.streaming.kafka010.*;
+
+import java.io.FileWriter;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+
+public class TweetAnalyzer {
+
+    private static final DateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+
+
+    public static void main(String[] args) throws InterruptedException {
+
+        // Create a local StreamingContext with two working thread and batch interval of 1 second
+        SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("tweet");
+        JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(2));
+
+
+        Map<String, Object> kafkaParams = new HashMap<>();
+        kafkaParams.put("bootstrap.servers", "localhost:9092");
+        kafkaParams.put("key.deserializer", StringDeserializer.class);
+        kafkaParams.put("value.deserializer", StringDeserializer.class);
+        kafkaParams.put("group.id", "group11");
+
+        Collection<String> topics = Arrays.asList("twitter_alpha");
+
+        JavaInputDStream<ConsumerRecord<String, String>> kafkaStream =
+                KafkaUtils.createDirectStream(
+                        jssc,
+                        LocationStrategies.PreferConsistent(),
+                        ConsumerStrategies.<String, String>Subscribe(topics, kafkaParams)
+                );
+
+//        kafkaStream.flatMap(record ->
+//        final JSONObject obj = new JSONObject("{" + record.key() + ":[" +record.value() +"]}");
+//        final JSONArray wholeTweet = obj.getJSONArray(record.key().substring(1, record.key().length()-1));
+//        return
+//        )
+
+
+                    kafkaStream.foreachRDD(rdd -> {
+
+                        rdd.foreach(record -> {
+                            final JSONObject obj = new JSONObject("{" + record.key() + ":[" +record.value() +"]}");
+                            final JSONArray wholeTweet = obj.getJSONArray(record.key().substring(1, record.key().length()-1));
+
+//                        System.out.println( "{" + record.key() + ":[" +record.value() +"]}");
+//                        System.out.println("This is a List" + record.key() + "End of list");
+//                        System.out.println("This is a List" + record.value() + "End of list");
+//                            System.out.println(wholeTweet.length());
+                            String text = wholeTweet.getJSONObject(0).getString("text");
+//                        System.out.println(System.currentTimeMillis() + text);
+//                        System.out.println("List(1)" + wholeTweet.getJSONObject(3) + "-------");
+                            FileWriter writer = new FileWriter("/Users/kaikin/test.csv", true);
+                            Date date = new Date();
+                            writer.append(sdf.format(date) + "," + "\"" + text + "\"");
+                            writer.flush();
+                            writer.close();
+
+                        });
+                    });
+
+
+
+
+//
+//        kafkaStream.foreachRDD(rdd -> {
+//
+//                    rdd.foreach(record -> {
+//                        final JSONObject obj = new JSONObject("{" + record.key() + ":[" +record.value() +"]}");
+//                        final JSONArray wholeTweet = obj.getJSONArray(record.key().substring(1, record.key().length()-1));
+//
+//
+////                        System.out.println( "{" + record.key() + ":[" +record.value() +"]}");
+////                        System.out.println("This is a List" + record.key() + "End of list");
+////                        System.out.println("This is a List" + record.value() + "End of list");
+//                        System.out.println(wholeTweet.length());
+//                        String text = wholeTweet.getJSONObject(0).getString("text");
+////                        System.out.println(System.currentTimeMillis() + text);
+////                        System.out.println("List(1)" + wholeTweet.getJSONObject(3) + "-------");
+//
+//
+//                    });
+//                });
+
+        jssc.start();
+        jssc.awaitTermination();
+
+}
+    }
